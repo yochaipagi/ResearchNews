@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# This is my technical stack for this project
+
+    -pyhton
+    -fastapi
+    -supabase
+    -next.js
+    -postgres
+    -s3
+    
+

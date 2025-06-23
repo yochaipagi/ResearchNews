@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: researchfeed
+      POSTGRES_PASSWORD: researchfeed
+      POSTGRES_DB: researchfeed
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U researchfeed"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://researchfeed:researchfeed@postgres:5432/researchfeed
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_PROVIDER=gemini
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BASE_URL=http://localhost:3000
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this-in-production}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - EMAIL_FROM_ADDRESS=digest@researchdigest.com
+      - EMAIL_FROM_NAME=Research Digest
+      - ADMIN_EMAILS=${ADMIN_EMAIL:-admin@researchdigest.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    environment:
+      - DATABASE_URL=postgresql://researchfeed:researchfeed@postgres:5432/researchfeed
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_PROVIDER=gemini
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BASE_URL=http://localhost:3000
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this-in-production}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - EMAIL_FROM_ADDRESS=digest@researchdigest.com
+      - EMAIL_FROM_NAME=Research Digest
+      - ADMIN_EMAILS=${ADMIN_EMAIL:-admin@researchdigest.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.beat
+    environment:
+      - DATABASE_URL=postgresql://researchfeed:researchfeed@postgres:5432/researchfeed
+      - REDIS_URL=redis://redis:6379/0
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LLM_PROVIDER=gemini
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BASE_URL=http://localhost:3000
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-this-in-production}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - EMAIL_FROM_ADDRESS=digest@researchdigest.com
+      - EMAIL_FROM_NAME=Research Digest
+      - ADMIN_EMAILS=${ADMIN_EMAIL:-admin@researchdigest.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-your-dev-secret}
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data: 
